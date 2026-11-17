@@ -230,26 +230,26 @@ async def test_image_generation_returns_success_without_forwarding_retry_control
     assert requests.qsize() == 1
 
 
-def test_image_generation_keeps_an_internal_prefixed_kwarg_out_of_the_provider_request(
-    respx_mock: respx.MockRouter,
-) -> None:
-    api_base: Final = "http://localhost:12346/v1"
-    mock_route: Final = respx_mock.post(url__regex=rf"{api_base}/images/generations.*").mock(
-        return_value=httpx.Response(status_code=200, json={"created": 1712697600, "data": [{"b64_json": "aW1n"}]})
-    )
-
-    litellm.image_generation(
-        model="openai/gpt-image-1",
-        prompt="a red circle",
-        api_base=api_base,
-        api_key="fake_openai_api_key",
-        _litellm_undeclared_sentinel="internal",
-    )
-
-    assert mock_route.called
-    sent: Final = json.loads(respx_mock.calls[0].request.content)
-    assert "_litellm_undeclared_sentinel" not in sent, sent
-    assert sent["prompt"] == "a red circle"
+@pytest.mark.asyncio
+async def test_image_generation_keeps_litellm_owned_kwargs_out_of_the_provider_request() -> None:
+    requests: Final[SimpleQueue[httpx.Request]] = SimpleQueue()
+    async with AsyncOpenAI(
+        api_key="synthetic-image-key",
+        base_url="https://image.test/v1",
+        max_retries=0,
+        http_client=httpx.AsyncClient(transport=_image_retry_transport(requests, "success")),
+    ) as client:
+        await litellm.aimage_generation(
+            model="openai/gpt-image-1-mini",
+            prompt="a red circle",
+            api_key="synthetic-image-key",
+            api_base="https://image.test/v1",
+            client=client,
+            include_fallback_errors=True,
+            _litellm_undeclared_sentinel="internal",
+        )
+    body: Final = TypeAdapter(dict[str, JsonValue]).validate_json(requests.get_nowait().content)
+    assert body == {"model": "gpt-image-1-mini", "prompt": "a red circle"}
 
 
 @pytest.mark.parametrize(

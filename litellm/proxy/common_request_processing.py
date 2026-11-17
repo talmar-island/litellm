@@ -2870,6 +2870,7 @@ class ProxyBaseLLMRequestProcessing:
         timeout: float | httpx.Timeout | None = None,
         litellm_logging_obj: LiteLLMLoggingObj | None = None,
         read_timing_from_logging_obj: bool = True,
+        additional_headers: Mapping[str, object] | None = None,
         **kwargs: object,
     ) -> dict[str, str]:
         exclude_values: Final = {"", None, "None"}
@@ -2932,6 +2933,7 @@ class ProxyBaseLLMRequestProcessing:
                 str(fastest_response_batch_completion) if fastest_response_batch_completion is not None else None
             ),
             "x-litellm-timeout": str(timeout) if timeout is not None else None,
+            **{k: str(v) for k, v in (additional_headers or {}).items()},
             **{k: str(v) for k, v in kwargs.items()},
         }
         if request_data:

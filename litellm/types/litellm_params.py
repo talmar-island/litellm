@@ -418,6 +418,7 @@ class RouterState:
     fallback_depth: int | None = None
     max_fallbacks: int | None = None
     attempted_targets: "AttemptedFallbackTargets | None" = None
+    include_fallback_errors: bool | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

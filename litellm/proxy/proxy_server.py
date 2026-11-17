@@ -14352,7 +14352,7 @@ async def audio_transcriptions(
             request_data=data,
             hidden_params=hidden_params,
             litellm_logging_obj=stream_logging_obj if isinstance(stream_logging_obj, LiteLLMLoggingObj) else None,
-            **additional_headers,
+            additional_headers=additional_headers,
         )
 
         # Call response headers hook (matches base_process_llm_request behavior)

@@ -127,7 +127,7 @@ async def rerank(
                 model_region=getattr(user_api_key_dict, "allowed_model_region", ""),
                 request_data=data,
                 hidden_params=hidden_params,
-                **additional_headers,
+                additional_headers=additional_headers,
             )
         )
 
