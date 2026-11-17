@@ -11,6 +11,7 @@ import orjson
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from pydantic import JsonValue, TypeAdapter
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -673,6 +674,43 @@ def test_image_generation_uses_team_router_settings_fallbacks(monkeypatch: pytes
         data=[ImageObject(url="https://images.example/generated.png")],
     ).model_dump(), response.text
     assert handler.calls == ["failing", "working"], response.text
+
+
+def test_image_generation_fallback_reports_the_failed_attempts_in_response_headers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from litellm.proxy import proxy_server
+
+    client, handler = _image_generation_client(
+        monkeypatch, UserAPIKeyAuth(router_settings={"fallbacks": [{"A": ["B"]}]})
+    )
+    monkeypatch.setattr(proxy_server, "general_settings", {"expose_fallback_errors_to_caller": True})
+
+    response: Final = client.post(
+        "/v1/images/generations", json={"model": "A", "prompt": "draw a tree", "include_fallback_errors": True}
+    )
+
+    assert response.status_code == 200, response.text
+    assert handler.calls == ["failing", "working"], response.text
+    assert response.headers.get("x-litellm-attempted-fallbacks") == "1", response.headers
+    errors: Final = TypeAdapter(list[dict[str, JsonValue]]).validate_json(response.headers["x-litellm-fallback-errors"])
+    assert [("primary failed" in str(error["message"]), error["code"]) for error in errors] == [(True, "429")], errors
+
+
+def test_image_generation_hides_fallback_errors_unless_the_proxy_exposes_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, handler = _image_generation_client(
+        monkeypatch, UserAPIKeyAuth(router_settings={"fallbacks": [{"A": ["B"]}]})
+    )
+
+    response: Final = client.post(
+        "/v1/images/generations", json={"model": "A", "prompt": "draw a tree", "include_fallback_errors": True}
+    )
+
+    assert response.status_code == 200, response.text
+    assert handler.calls == ["failing", "working"], response.text
+    assert "x-litellm-fallback-errors" not in response.headers, response.headers
 
 
 def test_image_generation_without_router_settings_does_not_use_fallback(monkeypatch: pytest.MonkeyPatch) -> None:

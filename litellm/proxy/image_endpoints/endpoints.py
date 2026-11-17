@@ -13,6 +13,8 @@ from pydantic import TypeAdapter
 
 import litellm
 from litellm.constants import MODEL_GROUP_ALIAS_RESOLVED_SCOPE_KEY
+from litellm.litellm_core_utils.add_retry_fallback_headers import get_hidden_params_dict
+from litellm.litellm_core_utils.core_helpers import as_str_mapping
 from litellm.litellm_core_utils.prompt_templates.common_utils import (
     get_str_from_messages,
 )
@@ -101,6 +103,7 @@ async def image_generation(
     from litellm.proxy.proxy_server import (
         add_litellm_data_to_request,
         general_settings,
+        general_settings_view,
         llm_router,
         proxy_config,
         proxy_logging_obj,
@@ -124,6 +127,8 @@ async def image_generation(
             version=version,
             proxy_config=proxy_config,
         )
+        if "include_fallback_errors" in data and not general_settings_view().get("expose_fallback_errors_to_caller"):
+            del data["include_fallback_errors"]
 
         if isinstance(model, str):
             reject_url_valued_destination("model", model)
@@ -204,7 +209,6 @@ async def image_generation(
         api_base: Final = hidden_params.get("api_base", None) or ""
         response_cost: Final = hidden_params.get("response_cost", None) or ""
         response_call_id: Final = hidden_params.get("litellm_call_id", None) or ""
-
         fastapi_response.headers.update(
             ProxyBaseLLMRequestProcessing.get_custom_headers(
                 user_api_key_dict=user_api_key_dict,
@@ -217,6 +221,7 @@ async def image_generation(
                 call_id=response_call_id,
                 request_data=data,
                 hidden_params=hidden_params,
+                additional_headers=as_str_mapping(get_hidden_params_dict(response).get("additional_headers")),
             )
         )
 
